@@ -1,4 +1,4 @@
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 import struct
 import binascii
@@ -103,7 +103,7 @@ def decompress(compressed: bytes) -> bytes:
             f"decompressed data length does not match. Expected {decompressed_length}, got {len(decompressed)}"
         )
 
-    return decompressed
+    return bytes(decompressed)
 
 
 def compress(decompressed: bytes, zlib_level=9) -> bytes:
@@ -144,16 +144,16 @@ def compress(decompressed: bytes, zlib_level=9) -> bytes:
     actual_crc = (
         binascii.crc32(header_no_crc[7:24], binascii.crc32(header_no_crc[:6])) & 0xFF
     )
-    compressed = struct.pack(
+    compressed = bytearray(struct.pack(
         HEADER,
         *MAGIC_BYTES,
         actual_crc,
         algorithm,
         decompressed_length,
         first_chunk_decompressed_length,
-    )
+    ))
 
-    current_zdict = b""
+    current_zdict = bytearray()
     while decompressed:
         chunk = decompressed[:MAX_CHUNK_SIZE]
         decompressed = decompressed[MAX_CHUNK_SIZE:]
@@ -167,11 +167,9 @@ def compress(decompressed: bytes, zlib_level=9) -> bytes:
 
         chunk_compressed = compressor.compress(chunk) + compressor.flush()
         # +2 is the 2 padding bytes (CHUNK_PADDING), which are included in the chunk length but not part of the zlib stream.
-        compressed += (
-            struct.pack(CHUNK_HEADER, len(chunk_compressed) + 2, CHUNK_PADDING)
-            + chunk_compressed
-        )
+        compressed.extend(struct.pack(CHUNK_HEADER, len(chunk_compressed) + 2, CHUNK_PADDING))
+        compressed.extend(chunk_compressed)
 
-        current_zdict += chunk
+        current_zdict.extend(chunk)
 
-    return compressed
+    return bytes(compressed)
